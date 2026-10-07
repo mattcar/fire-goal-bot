@@ -61,7 +61,7 @@ export function loadConfig(env = process.env) {
 
   return {
     dryRun,
-    blueskyIdentifier: env.BLUESKY_IDENTIFIER || 'fire-goal-bot.bsky.social',
+    blueskyIdentifier: env.BLUESKY_IDENTIFIER || 'chicagofirebot.bsky.social',
     blueskyPassword: blueskyPassword || '',
     pollIntervalMs: num('POLL_INTERVAL_MS', 30_000),
     initialDelayMs: num('INITIAL_DELAY_MS', 45_000),

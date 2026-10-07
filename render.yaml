@@ -17,7 +17,7 @@ services:
       - key: GOAL_STORE_PATH
         value: /data/posted-goals.json
       - key: BLUESKY_IDENTIFIER
-        value: fire-goal-bot.bsky.social
+        value: chicagofirebot.bsky.social
       - key: BLUESKY_PASSWORD
         sync: false # set manually in the Render dashboard (secret)
       # Optional tuning (defaults apply if unset):
