@@ -24,6 +24,20 @@
 export const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
 
+/**
+ * Headers for every data request. `Connection: close` is load-bearing:
+ * ESPN's edge (Akamai) closes idle keep-alive sockets aggressively, and
+ * undici's pooled fetch happily reuses the dead socket on the next
+ * request, which fails with a bare "fetch failed". A poll makes several
+ * sequential requests on the same pool, so without this every poll cycle
+ * after the first fails at the second request. Fresh connections cost one
+ * extra handshake per poll — negligible at a 30s cadence.
+ */
+export const REQUEST_HEADERS = {
+  'User-Agent': USER_AGENT,
+  Connection: 'close',
+};
+
 /** ESPN abbreviation -> mlssoccer.com match-page slug. Slugs beyond the
  *  well-trodden ones are best guesses — resolution is defensive so a wrong
  *  slug just skips that match gracefully (the site is case-insensitive). */
@@ -123,13 +137,13 @@ export class MlsClient {
   }
 
   async getJson(url) {
-    const res = await this.fetchFn(url, { headers: { 'User-Agent': USER_AGENT } });
+    const res = await this.fetchFn(url, { headers: REQUEST_HEADERS });
     if (!res.ok) throw new Error(`GET ${url} -> ${res.status}`);
     return res.json();
   }
 
   async getText(url) {
-    const res = await this.fetchFn(url, { headers: { 'User-Agent': USER_AGENT } });
+    const res = await this.fetchFn(url, { headers: REQUEST_HEADERS });
     if (!res.ok) throw new Error(`GET ${url} -> ${res.status}`);
     return res.text();
   }

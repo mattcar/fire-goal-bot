@@ -13,7 +13,7 @@ describe('loadConfig', () => {
   it('applies defaults', () => {
     const config = loadConfig({ BLUESKY_PASSWORD: 'secret' });
     assert.equal(config.dryRun, false);
-    assert.equal(config.blueskyIdentifier, 'fire-goal-bot.bsky.social');
+    assert.equal(config.blueskyIdentifier, 'chicagofirebot.bsky.social');
     assert.equal(config.pollIntervalMs, 30_000);
     assert.equal(config.initialDelayMs, 45_000);
     assert.equal(config.postDelayMs, 60_000);

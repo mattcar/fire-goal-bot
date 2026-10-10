@@ -125,6 +125,24 @@ const espnBoard = {
   ],
 };
 
+describe('MlsClient request headers', () => {
+  it('sends User-Agent and Connection: close (stale-socket workaround)', async () => {
+    let seen;
+    const client = new MlsClient({
+      espnBaseUrl: 'https://espn.example',
+      mlsStatsBaseUrl: 'https://mls.example',
+      season,
+      fetchFn: async (url, opts) => {
+        seen = opts?.headers;
+        return { ok: true, json: async () => ({}) };
+      },
+    });
+    await client.getJson('https://espn.example/x');
+    assert.ok(seen['User-Agent'].includes('Mozilla'), `no User-Agent: ${JSON.stringify(seen)}`);
+    assert.equal(seen.Connection, 'close');
+  });
+});
+
 describe('MlsClient.getFireMatches', () => {
   it('finds only matches involving CHI', async () => {
     const client = new MlsClient({
