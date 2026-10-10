@@ -68,6 +68,10 @@ export const ESPN_ABBREV_TO_SLUG = {
   CLT: 'clt',
   STL: 'stl',
   SD: 'sd',
+  NYC: 'nyc', // New York City FC — missing this skipped the entire 2026-10-10 CHI-NYC match
+  ATL: 'atl', // Atlanta United
+  NE: 'ne', // New England Revolution
+  SKC: 'skc', // Sporting Kansas City
 };
 
 export const FIRE_ABBREV = 'CHI';

@@ -20,6 +20,14 @@ describe('slugFor', () => {
     assert.equal(slugFor('VAN'), 'van');
     assert.equal(slugFor('LAFC'), 'lafc');
   });
+  it('maps every MLS club, so no Fire match is silently skipped', () => {
+    // Regression: NYC was missing, so the bot skipped the entire
+    // 2026-10-10 CHI vs NYCFC match (zero posts in a 2-1 Fire win).
+    assert.equal(slugFor('NYC'), 'nyc');
+    assert.equal(slugFor('ATL'), 'atl');
+    assert.equal(slugFor('NE'), 'ne');
+    assert.equal(slugFor('SKC'), 'skc');
+  });
   it('returns null for unknown abbreviations', () => {
     assert.equal(slugFor('XXX'), null);
   });
@@ -49,6 +57,18 @@ describe('buildMatchUrl', () => {
     assert.equal(
       buildMatchUrl({ homeAbbrev: 'CHI', awayAbbrev: 'XXX', date: kickoff }, season),
       null,
+    );
+  });
+
+  it('builds the CHI-NYC URL for the 2026-10-10 match (official mlssoccer.com shape)', () => {
+    // Official recap URL: .../matches/chivsnyc-10-10-2026/
+    const url = buildMatchUrl(
+      { homeAbbrev: 'CHI', awayAbbrev: 'NYC', date: new Date('2026-10-10T18:30:00Z') },
+      season,
+    );
+    assert.equal(
+      url,
+      'https://www.mlssoccer.com/competitions/mls-regular-season/2026/matches/chivsnyc-10-10-2026/',
     );
   });
 });
