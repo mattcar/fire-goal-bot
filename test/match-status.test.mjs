@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   GameTracker,
   normalizeStatus,
-  HALF_TIME_STATUS,
+  HALF_TIME_STATUSES,
   FULL_TIME_STATUSES,
 } from '../src/game-tracker.mjs';
 import { formatHTMessage, formatFTMessage } from '../src/goals.mjs';
@@ -30,7 +30,10 @@ describe('normalizeStatus', () => {
   });
 
   it('knows the observed half-time and full-time statuses', () => {
-    assert.equal(HALF_TIME_STATUS, 'halftime');
+    assert.ok(HALF_TIME_STATUSES.has('halftime'));
+    // Live feed reports "half" during the break (verified 2026-10-14 on
+    // LAFC-ATX and SD-HOU while both sat at HT).
+    assert.ok(HALF_TIME_STATUSES.has('half'));
     assert.ok(FULL_TIME_STATUSES.has('fulltime'));
     assert.ok(FULL_TIME_STATUSES.has('finalwhistle'));
   });
@@ -48,6 +51,15 @@ describe('HT transitions', () => {
     assert.equal(transitions[0].to, 'halftime');
     assert.equal(transitions[0].homeScore, 1);
     assert.equal(transitions[0].awayScore, 0);
+  });
+
+  it('posts HT on firstHalf -> half (the status the live feed actually reports)', () => {
+    const tracker = new GameTracker();
+    assert.deepEqual(tracker.updateMatchStatuses(new Map([[MATCH, statusReport('firstHalf')]])), []);
+    const transitions = tracker.updateMatchStatuses(new Map([[MATCH, statusReport('half')]]));
+    assert.equal(transitions.length, 1);
+    assert.equal(transitions[0].kind, 'ht');
+    assert.equal(transitions[0].to, 'half');
   });
 
   it('does not post HT when the match is already at halfTime on first sight', () => {

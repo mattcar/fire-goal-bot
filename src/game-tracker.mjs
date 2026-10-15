@@ -22,9 +22,10 @@ export const DEFAULT_SWEEP_WINDOW_MS = 20 * 60 * 1000;
 
 /**
  * MLS match statuses that mean half time, normalized to lowercase.
- * The feed has been observed using "halfTime".
+ * The feed reports "half" during the break (verified live 2026-10-14
+ * against two matches sitting at HT); "halfTime" kept for good measure.
  */
-export const HALF_TIME_STATUS = 'halftime';
+export const HALF_TIME_STATUSES = new Set(['halftime', 'half']);
 
 /**
  * MLS match statuses that mean the match is over, normalized to
@@ -136,7 +137,7 @@ export class GameTracker {
       const to = normalizeStatus(current?.status);
       const prev = this.matchStatuses.get(matchId);
       if (prev) {
-        if (!prev.htPosted && to === HALF_TIME_STATUS && prev.status !== HALF_TIME_STATUS) {
+        if (!prev.htPosted && HALF_TIME_STATUSES.has(to) && !HALF_TIME_STATUSES.has(prev.status)) {
           prev.htPosted = true;
           transitions.push({ matchId, kind: 'ht', from: prev.status, to, ...scoreFields(current) });
         }

@@ -27,6 +27,9 @@ describe('slugFor', () => {
     assert.equal(slugFor('ATL'), 'atl');
     assert.equal(slugFor('NE'), 'ne');
     assert.equal(slugFor('SKC'), 'skc');
+    // Regression: ESPN abbreviates the Galaxy "LA" (not "LAG"); missing it
+    // would silently skip a Fire vs Galaxy match like NYC did on 2026-10-10.
+    assert.equal(slugFor('LA'), 'la');
   });
   it('returns null for unknown abbreviations', () => {
     assert.equal(slugFor('XXX'), null);

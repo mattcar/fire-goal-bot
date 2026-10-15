@@ -5,6 +5,7 @@ import {
   goalKey,
   isSameGoal,
   changedFields,
+  needsCorrectionPost,
   formatGoalMessage,
   formatCorrectionMessage,
   scoringTeamLabel,
@@ -154,6 +155,23 @@ describe('changedFields', () => {
   });
   it('is empty when nothing changed', () => {
     assert.deepEqual(changedFields(goal, { ...goal }), []);
+  });
+});
+
+describe('needsCorrectionPost', () => {
+  const [goal] = extractGoals([bambaGoalItem]);
+  it('posts when the scorer changed', () => {
+    assert.ok(needsCorrectionPost(goal, { ...goal, scorer: 'Hugo Cuypers' }));
+  });
+  it('posts when the score changed', () => {
+    assert.ok(needsCorrectionPost(goal, { ...goal, homeScore: 2 }));
+  });
+  it('stays silent on assist-only waves (the MLS feed dribbles assists in)', () => {
+    // Tonight's PHI match: 5 correction posts, all assist-only.
+    assert.ok(!needsCorrectionPost(goal, { ...goal, assists: 'Philip Zinckernagel' }));
+  });
+  it('stays silent when nothing changed', () => {
+    assert.ok(!needsCorrectionPost(goal, { ...goal }));
   });
 });
 

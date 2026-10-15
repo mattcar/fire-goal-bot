@@ -72,6 +72,7 @@ export const ESPN_ABBREV_TO_SLUG = {
   ATL: 'atl', // Atlanta United
   NE: 'ne', // New England Revolution
   SKC: 'skc', // Sporting Kansas City
+  LA: 'la', // LA Galaxy — ESPN uses "LA"; "LAG" never appears on the scoreboard
 };
 
 export const FIRE_ABBREV = 'CHI';

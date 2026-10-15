@@ -73,6 +73,17 @@ export function changedFields(oldGoal, newGoal) {
   return fields;
 }
 
+/**
+ * Whether a goal update warrants a standalone correction post.
+ * The MLS feed dribbles assist info in over several minutes, so an
+ * assist-only change is folded into the stored record silently — a post
+ * per wave is just noise. Scorer/score changes still post.
+ */
+export function needsCorrectionPost(oldGoal, newGoal) {
+  const fields = changedFields(oldGoal, newGoal);
+  return fields.length > 0 && !(fields.length === 1 && fields[0] === 'assists');
+}
+
 function cleanTeamName(name) {
   return String(name ?? '').replace(/\s+FC$/, '').trim() || 'Unknown Team';
 }

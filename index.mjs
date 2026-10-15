@@ -26,6 +26,7 @@ import {
   goalKey,
   isSameGoal,
   changedFields,
+  needsCorrectionPost,
   formatGoalMessage,
   formatCorrectionMessage,
   formatHTMessage,
@@ -225,17 +226,27 @@ async function main() {
   }
 
   async function maybePostCorrection(key, record, goal, teams) {
-    if (record.updateCount >= config.maxUpdates) return;
     if (!isSameETDay(record.timestamp)) return;
-    const fields = changedFields(record.goal, goal);
-    if (fields.length === 0) return;
-
-    record.updateCount += 1;
-    const response = await poster.post(formatCorrectionMessage(goal, record.goal, teams));
+    const previousGoal = record.goal;
+    if (changedFields(previousGoal, goal).length === 0) return;
+    // Always keep the stored record current; assist-only waves are folded
+    // in silently (see needsCorrectionPost) instead of spamming the feed.
     record.goal = goal;
     record.timestamp = Date.now();
+    if (!needsCorrectionPost(previousGoal, goal)) {
+      await store.save();
+      log(`Assist-only update for ${key}, folded in silently`);
+      return;
+    }
+    if (record.updateCount >= config.maxUpdates) {
+      await store.save();
+      return;
+    }
+
+    record.updateCount += 1;
+    const response = await poster.post(formatCorrectionMessage(goal, previousGoal, teams));
     await store.save();
-    log(`Posted correction for ${key}`, { uri: response.uri, fields });
+    log(`Posted correction for ${key}`, { uri: response.uri });
   }
 
   async function pollGames() {
