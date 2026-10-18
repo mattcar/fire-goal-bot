@@ -2,7 +2,9 @@
  * Persistent record of goals we've seen, so a restart doesn't repost
  * everything. Stored as JSON on disk, written atomically.
  *
- * Record shape: { goal, posted, updateCount, firstSeen, timestamp }
+ * Record shape: { goal, posted, updateCount, firstSeen, timestamp,
+ *   postUri, postCid,            // original goal post, for threading replies
+ *   assistReplyUri, assistReplyCid } // current "Assisted by" reply, if any
  *
  * The same file also holds small non-goal metadata under reserved keys
  * starting with META_PREFIX (e.g. the game tracker's live set), so there is

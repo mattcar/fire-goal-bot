@@ -41,16 +41,49 @@ export class BlueskyPoster {
 
   async post(text) {
     try {
-      return await this.attemptPost(text);
+      return await this.attemptPost({ text });
     } catch (err) {
       if (!this.isSessionFailure(err)) throw err;
       await this.login();
-      return this.attemptPost(text);
+      return this.attemptPost({ text });
     }
   }
 
-  async attemptPost(text) {
-    const response = await this.bot.post({ text });
+  /**
+   * Post a threaded reply under an existing post. `ref` is { uri, cid } of
+   * the post being replied to — root and parent are the same, so every
+   * follow-up threads directly under the original goal post.
+   */
+  async reply(text, ref) {
+    const payload = {
+      text,
+      replyRef: {
+        root: { uri: ref.uri, cid: ref.cid },
+        parent: { uri: ref.uri, cid: ref.cid },
+      },
+    };
+    try {
+      return await this.attemptPost(payload);
+    } catch (err) {
+      if (!this.isSessionFailure(err)) throw err;
+      await this.login();
+      return this.attemptPost(payload);
+    }
+  }
+
+  /** Delete one of the bot's own posts (used to replace a stale assist reply). */
+  async deletePost(uri) {
+    try {
+      await this.bot.deletePost(uri);
+    } catch (err) {
+      if (!this.isSessionFailure(err)) throw err;
+      await this.login();
+      await this.bot.deletePost(uri);
+    }
+  }
+
+  async attemptPost(payload) {
+    const response = await this.bot.post(payload);
     if (!response?.uri) {
       throw new Error('Bluesky post returned no URI');
     }

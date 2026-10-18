@@ -5,8 +5,10 @@ import {
   goalKey,
   isSameGoal,
   changedFields,
-  needsCorrectionPost,
+  updateKind,
   formatGoalMessage,
+  formatAssistReply,
+  formatCorrectionReply,
   formatCorrectionMessage,
   scoringTeamLabel,
 } from '../src/goals.mjs';
@@ -158,20 +160,50 @@ describe('changedFields', () => {
   });
 });
 
-describe('needsCorrectionPost', () => {
+describe('updateKind', () => {
   const [goal] = extractGoals([bambaGoalItem]);
-  it('posts when the scorer changed', () => {
-    assert.ok(needsCorrectionPost(goal, { ...goal, scorer: 'Hugo Cuypers' }));
+  it("flags a scorer change as a 'correction'", () => {
+    assert.equal(updateKind(goal, { ...goal, scorer: 'Hugo Cuypers' }), 'correction');
   });
-  it('posts when the score changed', () => {
-    assert.ok(needsCorrectionPost(goal, { ...goal, homeScore: 2 }));
+  it("flags a score change as a 'correction'", () => {
+    assert.equal(updateKind(goal, { ...goal, homeScore: 2 }), 'correction');
   });
-  it('stays silent on assist-only waves (the MLS feed dribbles assists in)', () => {
-    // Tonight's PHI match: 5 correction posts, all assist-only.
-    assert.ok(!needsCorrectionPost(goal, { ...goal, assists: 'Philip Zinckernagel' }));
+  it("flags scorer+assists together as a 'correction'", () => {
+    assert.equal(
+      updateKind(goal, { ...goal, scorer: 'Hugo Cuypers', assists: 'Philip Zinckernagel' }),
+      'correction',
+    );
   });
-  it('stays silent when nothing changed', () => {
-    assert.ok(!needsCorrectionPost(goal, { ...goal }));
+  it("flags assist-only waves as 'assists' (the MLS feed dribbles assists in)", () => {
+    assert.equal(updateKind(goal, { ...goal, assists: 'Philip Zinckernagel' }), 'assists');
+  });
+  it("returns 'none' when nothing changed", () => {
+    assert.equal(updateKind(goal, { ...goal }), 'none');
+  });
+});
+
+describe('formatAssistReply', () => {
+  const [goal] = extractGoals([bambaGoalItem]);
+  it('formats a threaded assist reply', () => {
+    assert.equal(formatAssistReply(goal), 'Assisted by Anton Salétros.');
+  });
+});
+
+describe('formatCorrectionReply', () => {
+  const [goal] = extractGoals([bambaGoalItem]);
+  it('notes a scorer credit change as a short thread reply', () => {
+    const previous = { ...goal, scorer: 'Hugo Cuypers' };
+    assert.equal(
+      formatCorrectionReply(goal, previous, teams),
+      'Correction: goal now credited to Jonathan Bamba (was Hugo Cuypers).',
+    );
+  });
+  it('notes a score change as a short thread reply', () => {
+    const previous = { ...goal, homeScore: 0 };
+    assert.equal(
+      formatCorrectionReply(goal, previous, teams),
+      'Correction: score updated to CHI 1-0 VAN.',
+    );
   });
 });
 

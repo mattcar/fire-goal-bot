@@ -74,14 +74,18 @@ export function changedFields(oldGoal, newGoal) {
 }
 
 /**
- * Whether a goal update warrants a standalone correction post.
- * The MLS feed dribbles assist info in over several minutes, so an
- * assist-only change is folded into the stored record silently — a post
- * per wave is just noise. Scorer/score changes still post.
+ * What kind of feed update a goal change warrants.
+ * - 'none': nothing changed, stay quiet.
+ * - 'assists': the MLS feed dribbles assist info in over several minutes;
+ *   these thread under the original goal post as a single "Assisted by" reply.
+ * - 'correction': scorer or score changed — a genuine correction, also
+ *   threaded under the original goal post.
  */
-export function needsCorrectionPost(oldGoal, newGoal) {
+export function updateKind(oldGoal, newGoal) {
   const fields = changedFields(oldGoal, newGoal);
-  return fields.length > 0 && !(fields.length === 1 && fields[0] === 'assists');
+  if (fields.length === 0) return 'none';
+  if (fields.length === 1 && fields[0] === 'assists') return 'assists';
+  return 'correction';
 }
 
 function cleanTeamName(name) {
@@ -131,6 +135,36 @@ export function formatFTMessage(score) {
   return `⏹️ FT — ${cleanTeamName(score.homeName)} ${score.homeScore}-${score.awayScore} ${cleanTeamName(score.awayName)}`;
 }
 
+/**
+ * Threaded reply posted under the goal post when assists arrive late.
+ * Example: "Assisted by Noah Allen, second assist by Jonathan Bamba."
+ */
+export function formatAssistReply(goal) {
+  return `Assisted by ${goal.assists}.`;
+}
+
+/**
+ * Threaded reply posted under the goal post for a genuine scoring correction
+ * (scorer or score changed). Shorter than the standalone post — it lives in
+ * the goal's thread, so the context is already there.
+ * Example: "Correction: goal now credited to Jonathan Bamba (was Hugo Cuypers)."
+ */
+export function formatCorrectionReply(goal, previousGoal, teams) {
+  const parts = [];
+  if (goal.scorer !== previousGoal.scorer) {
+    parts.push(`goal now credited to ${goal.scorer} (was ${previousGoal.scorer})`);
+  }
+  if (goal.homeScore !== previousGoal.homeScore || goal.awayScore !== previousGoal.awayScore) {
+    parts.push(`score updated to ${scoreLine(goal, teams)}`);
+  }
+  return `Correction: ${parts.join('; ')}.`;
+}
+
+/**
+ * Legacy standalone correction post. Only used as a fallback when the goal
+ * record predates threaded replies (no stored post ref) — new records thread
+ * corrections under the original goal post instead.
+ */
 export function formatCorrectionMessage(goal, previousGoal, teams) {
   let message = 'CORRECTION: ';
   if (goal.scorer !== previousGoal.scorer) {

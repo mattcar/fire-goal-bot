@@ -25,9 +25,10 @@ import {
   extractGoals,
   goalKey,
   isSameGoal,
-  changedFields,
-  needsCorrectionPost,
+  updateKind,
   formatGoalMessage,
+  formatAssistReply,
+  formatCorrectionReply,
   formatCorrectionMessage,
   formatHTMessage,
   formatFTMessage,
@@ -49,7 +50,14 @@ class ConsolePoster {
   async login() {}
   async post(text) {
     log('[dry-run] would post:', text);
-    return { uri: 'dry-run:console' };
+    return { uri: 'dry-run:console', cid: 'dry-run:console' };
+  }
+  async reply(text, ref) {
+    log('[dry-run] would reply to', ref.uri, ':', text);
+    return { uri: 'dry-run:console-reply', cid: 'dry-run:console-reply' };
+  }
+  async deletePost(uri) {
+    log('[dry-run] would delete post:', uri);
   }
 }
 
@@ -178,7 +186,7 @@ async function main() {
       const record = findRecord(matchId, goal);
 
       if (record?.posted) {
-        await maybePostCorrection(key, record, goal, teams);
+        await maybePostThreadUpdate(key, record, goal, teams);
         return;
       }
 
@@ -214,6 +222,9 @@ async function main() {
       const response = await poster.post(formatGoalMessage(goal, teams));
       rec.posted = true;
       rec.timestamp = Date.now();
+      // Stored so later updates can thread replies under this post.
+      rec.postUri = response.uri;
+      rec.postCid = response.cid;
       health.goalsPosted += 1;
       await store.save();
       log(`Posted goal ${key}`, { uri: response.uri });
@@ -225,28 +236,66 @@ async function main() {
     }
   }
 
-  async function maybePostCorrection(key, record, goal, teams) {
+  /**
+   * Follow-ups thread under the original goal post instead of posting
+   * standalone "CORRECTION:" posts. Assist waves become a single
+   * "Assisted by ..." reply (replaced when a later wave adds more); genuine
+   * scorer/score corrections become a "Correction: ..." reply. Records that
+   * predate threading (no stored post ref) keep the old standalone post as
+   * a fallback for real corrections.
+   */
+  async function maybePostThreadUpdate(key, record, goal, teams) {
     if (!isSameETDay(record.timestamp)) return;
     const previousGoal = record.goal;
-    if (changedFields(previousGoal, goal).length === 0) return;
-    // Always keep the stored record current; assist-only waves are folded
-    // in silently (see needsCorrectionPost) instead of spamming the feed.
+    const kind = updateKind(previousGoal, goal);
+    if (kind === 'none') return;
+    // Always keep the stored record current.
     record.goal = goal;
     record.timestamp = Date.now();
-    if (!needsCorrectionPost(previousGoal, goal)) {
+    const ref =
+      record.postUri && record.postCid ? { uri: record.postUri, cid: record.postCid } : null;
+
+    if (kind === 'assists') {
+      if (!goal.assists || !ref) {
+        await store.save();
+        log(`Assist update for ${key}, no original post ref — folded silently`);
+        return;
+      }
+      // Replace any earlier assist reply so the thread shows exactly one.
+      if (record.assistReplyUri) {
+        try {
+          await poster.deletePost(record.assistReplyUri);
+        } catch (err) {
+          log(`Assist reply delete failed for ${key}: ${err.message}`);
+        }
+        record.assistReplyUri = undefined;
+        record.assistReplyCid = undefined;
+      }
+      const response = await poster.reply(formatAssistReply(goal), ref);
+      record.assistReplyUri = response.uri;
+      record.assistReplyCid = response.cid;
       await store.save();
-      log(`Assist-only update for ${key}, folded in silently`);
+      log(`Posted assist reply for ${key}`, { uri: response.uri });
       return;
     }
+
+    // kind === 'correction': scorer or score changed.
     if (record.updateCount >= config.maxUpdates) {
       await store.save();
       return;
     }
-
     record.updateCount += 1;
-    const response = await poster.post(formatCorrectionMessage(goal, previousGoal, teams));
-    await store.save();
-    log(`Posted correction for ${key}`, { uri: response.uri });
+    if (ref) {
+      const response = await poster.reply(formatCorrectionReply(goal, previousGoal, teams), ref);
+      await store.save();
+      log(`Posted correction reply for ${key}`, { uri: response.uri });
+    } else {
+      const response = await poster.post(formatCorrectionMessage(goal, previousGoal, teams));
+      await store.save();
+      log(`Posted correction for ${key} (no post ref, standalone fallback)`, {
+        uri: response.uri,
+      });
+    }
   }
 
   async function pollGames() {
