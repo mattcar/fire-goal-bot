@@ -198,11 +198,16 @@ export class MlsClient {
 
   /**
    * Resolve a Fire match to its MLS sportecId by fetching the match page
-   * and scraping the embedded id. Cached per ESPN event id; null when the
-   * slug is unknown or the page yields nothing (caller skips the match).
+   * and scraping the embedded id. Successful resolutions are cached per
+   * ESPN event id. Failures are deliberately NOT cached: a match page that
+   * isn't up yet (or a transient fetch failure) is retried on the next
+   * poll instead of blinding the bot to that match for the rest of the
+   * process lifetime. Returns null when the slug is unknown or the page
+   * yields nothing (caller skips the match).
    */
   async resolveSportecId(match) {
-    if (this.sportecCache.has(match.espnId)) return this.sportecCache.get(match.espnId);
+    const cached = this.sportecCache.get(match.espnId);
+    if (cached) return cached;
     const url = buildMatchUrl(
       { homeAbbrev: match.home.abbrev, awayAbbrev: match.away.abbrev, date: match.date },
       this.season,
@@ -215,7 +220,7 @@ export class MlsClient {
         sportecId = null; // defensive: a bad slug or a flaky page just skips
       }
     }
-    this.sportecCache.set(match.espnId, sportecId);
+    if (sportecId) this.sportecCache.set(match.espnId, sportecId);
     return sportecId;
   }
 

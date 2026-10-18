@@ -242,6 +242,26 @@ describe('MlsClient.resolveSportecId', () => {
     });
     assert.equal(await client.resolveSportecId(match), null);
   });
+
+  it('retries a failed resolution instead of caching the null', async () => {
+    // Regression test: a transient failure (page not up yet) used to be
+    // cached as null for the process lifetime, blinding the bot to the
+    // whole match (Oct 17 2026 NE match posted nothing).
+    let calls = 0;
+    const client = new MlsClient({
+      espnBaseUrl: 'https://espn.example',
+      mlsStatsBaseUrl: 'https://mls.example',
+      season,
+      fetchFn: async () => {
+        calls += 1;
+        if (calls === 1) return { ok: true, text: async () => '<html>no id here</html>' };
+        return { ok: true, text: async () => '<div data="MLS-MAT-0009H7"></div>' };
+      },
+    });
+    assert.equal(await client.resolveSportecId(match), null);
+    assert.equal(await client.resolveSportecId(match), 'MLS-MAT-0009H7');
+    assert.equal(calls, 2);
+  });
 });
 
 describe('MlsClient.getCommentary', () => {
