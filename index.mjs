@@ -83,10 +83,33 @@ async function main() {
       });
   const store = await new GoalStore(config.storePath).load();
 
-  // Protect currently-live games from the prune below: a restart landing
-  // across ET midnight must not wipe a game in progress — the next poll
-  // would repost every goal as new. Best-effort; a fetch failure just
-  // falls back to the unprotected prune.
+  /**
+   * Matches seen LIVE, so just-ended matches get a final sweep — re-run
+   * for a while afterwards in case the MLS feed is slow to record
+   * last-second goals. The live set is restored from the store so a
+   * restart landing exactly on a match ending doesn't skip that match's
+   * final sweep. Stale snapshots (long downtime) are discarded by
+   * fromSnapshot — sweeping those matches could repost goals whose
+   * records were already pruned.
+   *
+   * Restored BEFORE the prune below so games still in their sweep
+   * window are protected from it too: pruning a just-ended game's
+   * records and then sweeping it reposts every goal as new
+   * (2026-10-31, Colorado match).
+   */
+  const gameTracker = GameTracker.fromSnapshot(store.getMeta('gameTracker'), {
+    maxAgeMs: config.scoreMaxAgeMs,
+    sweepWindowMs: config.sweepWindowMs,
+  });
+  if (gameTracker.recentlyLive.size > 0) {
+    log('Restored game tracker live set', [...gameTracker.recentlyLive]);
+  }
+
+  // Protect currently-live games and games still in their post-match
+  // sweep window from the prune below: a restart landing across ET
+  // midnight must not wipe a game in progress or just ended — the next
+  // poll would repost every goal as new. Best-effort; a fetch failure
+  // just falls back to the unprotected prune.
   let liveNow = [];
   try {
     const matches = await mls.getFireMatches(dateKeysToScan());
@@ -97,7 +120,7 @@ async function main() {
   } catch (err) {
     log(`Startup: couldn't fetch live games to protect from prune: ${err.message}`);
   }
-  pruneOldGoals(store, config, liveNow);
+  pruneOldGoals(store, config, [...liveNow, ...gameTracker.protectedGameIds()]);
   await store.save();
 
   // Health reporting starts before anything that can fail and kill the
@@ -148,23 +171,6 @@ async function main() {
 
   /** Goal keys currently being handled; the poll loop never awaits these. */
   const inFlight = new Set();
-
-  /**
-   * Matches seen LIVE, so just-ended matches get a final sweep — re-run
-   * for a while afterwards in case the MLS feed is slow to record
-   * last-second goals. The live set is restored from the store so a
-   * restart landing exactly on a match ending doesn't skip that match's
-   * final sweep. Stale snapshots (long downtime) are discarded by
-   * fromSnapshot — sweeping those matches could repost goals whose
-   * records were already pruned.
-   */
-  const gameTracker = GameTracker.fromSnapshot(store.getMeta('gameTracker'), {
-    maxAgeMs: config.scoreMaxAgeMs,
-    sweepWindowMs: config.sweepWindowMs,
-  });
-  if (gameTracker.recentlyLive.size > 0) {
-    log('Restored game tracker live set', [...gameTracker.recentlyLive]);
-  }
 
   /** Exact key hit, else a fuzzy match for a re-issued event id. */
   function findRecord(matchId, goal) {
@@ -397,8 +403,11 @@ async function main() {
         lastDay = today;
         // Matches seen live on the previous poll may still be in progress
         // across the ET midnight boundary — never prune their records, or
-        // the next poll reposts every goal as new.
-        const removed = pruneOldGoals(store, config, gameTracker.recentlyLive);
+        // the next poll reposts every goal as new. The same goes for
+        // matches that ended recently but are still in their sweep
+        // window: pruning them and then sweeping reposts every goal
+        // (2026-10-31, Colorado match).
+        const removed = pruneOldGoals(store, config, gameTracker.protectedGameIds());
         await store.save();
         log(`New ET day, pruned ${removed} old goal record(s)`);
       }
