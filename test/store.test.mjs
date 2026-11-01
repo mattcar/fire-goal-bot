@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GoalStore, pruneOldGoals } from '../src/store.mjs';
+import { GameTracker } from '../src/game-tracker.mjs';
 
 describe('GoalStore', () => {
   let dir;
@@ -100,5 +101,39 @@ describe('pruneOldGoals', () => {
     store.set('m:1', { timestamp: now - 5 * 60 * 60 * 1000 });
     const removed = pruneOldGoals(store, { scoreMaxAgeMs: 4 * 60 * 60 * 1000 }, [], { now });
     assert.equal(removed, 1);
+  });
+
+  it('protects a match still in its sweep window across ET midnight (2026-10-31 regression)', () => {
+    // The Colorado match ended 10 minutes before ET midnight; the
+    // midnight prune wiped its records and the same tick re-swept it,
+    // reposting all six goals. A match still in its sweep window must
+    // survive the prune even when its records are previous-day.
+    const tracker = new GameTracker({ sweepWindowMs: 20 * 60 * 1000 });
+    const endedAt = new Date('2026-11-01T03:50:00Z').getTime(); // 11:50 PM ET Oct 31
+    const now = new Date('2026-11-01T04:00:30Z').getTime(); // 12:00:30 AM ET Nov 1
+    tracker.endedGames(['m'], { now: endedAt - 60_000 });
+    tracker.endedGames([], { now: endedAt }); // m ended
+    const store = new GoalStore('/nonexistent');
+    // A goal posted during the match: previous ET day, but only 90
+    // minutes old, so only the day boundary makes it prunable.
+    store.set('m:1', { timestamp: new Date('2026-11-01T02:30:00Z').getTime() });
+    const removed = pruneOldGoals(
+      store,
+      { scoreMaxAgeMs: 4 * 60 * 60 * 1000 },
+      tracker.protectedGameIds({ now }),
+      { now },
+    );
+    assert.equal(removed, 0);
+    assert.ok(store.has('m:1'));
+    // Control: without the sweep-window protection, the same record
+    // is pruned.
+    const removedUnprotected = pruneOldGoals(
+      store,
+      { scoreMaxAgeMs: 4 * 60 * 60 * 1000 },
+      [],
+      { now },
+    );
+    assert.equal(removedUnprotected, 1);
+    assert.ok(!store.has('m:1'));
   });
 });

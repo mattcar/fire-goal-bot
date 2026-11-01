@@ -118,6 +118,25 @@ export class GameTracker {
   }
 
   /**
+   * Game ids the prune must not touch: games currently live plus games
+   * that ended recently and are still inside the sweep window. A match
+   * that ended 10 minutes ago is no longer "live", but the poll loop
+   * will still sweep it — pruning its goal records first makes the
+   * sweep repost every goal as new. (Seen in production 2026-10-31:
+   * the ET midnight prune wiped the Colorado match's records while it
+   * was still in its sweep window, and the same tick re-swept it and
+   * reposted all six goals.) Expired ended games are excluded; the
+   * sweep window, not liveness alone, is what keeps a game protected.
+   */
+  protectedGameIds({ now = Date.now() } = {}) {
+    const ids = [...this.recentlyLive];
+    for (const [id, endedAt] of this.recentlyEnded) {
+      if (now - endedAt <= this.sweepWindowMs) ids.push(id);
+    }
+    return ids;
+  }
+
+  /**
    * Observe the current MLS match status of each game and report
    * half-time / full-time transitions the poll loop should post.
    *

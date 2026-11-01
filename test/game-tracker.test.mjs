@@ -62,4 +62,23 @@ describe('GameTracker', () => {
   it('has a 20-minute default sweep window', () => {
     assert.equal(DEFAULT_SWEEP_WINDOW_MS, 20 * 60 * 1000);
   });
+
+  it('protectedGameIds covers live games and recently ended games still in the window', () => {
+    const tracker = new GameTracker({ sweepWindowMs: 60_000 });
+    const now = Date.now();
+    tracker.endedGames(['a', 'b'], { now });
+    tracker.endedGames(['a'], { now: now + 1000 }); // b ended
+    assert.deepEqual(tracker.protectedGameIds({ now: now + 2000 }).sort(), ['a', 'b']);
+    // b's window expired: only the live game stays protected.
+    assert.deepEqual(tracker.protectedGameIds({ now: now + 62_000 }), ['a']);
+  });
+
+  it('a match seen live again is protected once, as a live game', () => {
+    const tracker = new GameTracker({ sweepWindowMs: 60_000 });
+    const now = Date.now();
+    tracker.endedGames(['a'], { now });
+    tracker.endedGames([], { now: now + 1000 }); // a ended
+    tracker.endedGames(['a'], { now: now + 2000 }); // flaky API shows it live again
+    assert.deepEqual(tracker.protectedGameIds({ now: now + 3000 }), ['a']);
+  });
 });
